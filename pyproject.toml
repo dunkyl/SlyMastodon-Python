@@ -1,0 +1,36 @@
+[project]
+name = "SlyMastodon"
+version = "0.0.1"
+description = "No-boilerplate, async and typed Mastodon access 😋"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file="LICENSE" }
+authors = [{name="Dunkyl 🔣🔣"}]
+dependencies = [
+    'SlyAPI >= 0.4.3',
+]
+[project.optional-dependencies]
+dev = [
+    # testing
+    'pytest', 'pytest-asyncio',
+
+    # docs
+    'sphinx',
+    'myst-parser',
+    'furo',
+    'sphinxcontrib-trio',
+    'sphinx-copybutton',
+    'sphinxext-opengraph'
+]
+
+[project.urls]
+Homepage = "https://github.com/dunkyl/SlyMastodon-Python"
+Repository = "https://github.com/dunkyl/SlyMastodon-Python"
+# Documentation = "https://docs.dunkyl.net/SlyMastodon-Python/"
+"Bug Tracker" = "https://github.com/dunkyl/SlyMastodon-Python/issues"
+
+[build-system]
+requires = ["setuptools", "wheel"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
