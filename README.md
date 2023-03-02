@@ -1,6 +1,8 @@
 # SlyMastodon for Python
 
-> 🚧 **Work in progress**
+> **Warning**
+>
+> This package is an early work in progress. Breaking changes may be frequent!
 
 > 🐍 For Python 3.11+
 
