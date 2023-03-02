@@ -9,7 +9,8 @@ No-boilerplate, *async* and *typed* Mastodon access! 😋
 pip install slymastodon
 ```
 This library does not proivde full coverage. Currently, only the following topics are supported:
-- None
+- Getting the current user and other users
+- Posting, scheduling, retrieving, and deleting toots
 
 ---
 

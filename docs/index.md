@@ -12,7 +12,7 @@
 :maxdepth: 2
 :caption: Contents
 
-release_notes.md
+tutorial/getting_started.md
 ```
 
 ```{toctree}
@@ -21,6 +21,14 @@ release_notes.md
 :caption: API Reference
 
 ref
+```
+
+```{toctree}
+:hidden:
+:maxdepth: 2
+:caption: Development
+
+release_notes.md
 ```
 
 # Indices and tables

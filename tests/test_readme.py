@@ -5,5 +5,5 @@ async def test_readme():
                   OAuth2("app.json", "user.json") )
     
     user = await m.me()
-    
-    print(user)
+
+    print(user.at_username)
