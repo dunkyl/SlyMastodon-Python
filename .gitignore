@@ -1,4 +1,5 @@
 docs/ref
+tests/*.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

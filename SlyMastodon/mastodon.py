@@ -2,39 +2,19 @@
 Mastodon API and types
 https://docs.joinmastodon.org/api/
 '''
-from dataclasses import asdict, dataclass, fields, is_dataclass
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 import re
-from typing import Any
 from SlyAPI import *
 from SlyAPI.web import JsonMap
+
+from .serialization import DataclassJsonMixin
 
 # like @username@domain
 RE_AT_AT = re.compile(r'@(\w+)@(\w+)')
 # like @username
 RE_AT = re.compile(r'@(\w+)')
-
-def _dataclass_from_json(cls, obj: Any):
-    params = {}
-    for field in fields(cls):
-        if field.name not in obj:
-            raise ValueError(f"Missing expected field {field.name} for {cls}")
-        if field.type == datetime:
-            params[field.name] = datetime.fromisoformat(obj[field.name])
-        elif hasattr(field.type, 'from_json'):
-            params[field.name] = field.type.from_json(obj[field.name])
-        elif is_dataclass(field.type):
-            params[field.name] = _dataclass_from_json(field.type, obj[field.name])
-        elif issubclass(field.type, Enum):
-            params[field.name] = field.type(obj[field.name])
-        else:
-            params[field.name] = obj[field.name]
-    return cls(**params)
-
-class _FromJsonMixin:
-    @classmethod
-    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
 
 class ScopeSimple:
     READ = "read"
@@ -100,13 +80,13 @@ class Emoji:
     category: str
 
 @dataclass
-class UserField(_FromJsonMixin):
+class UserField(DataclassJsonMixin):
     name: str
     value: str
     verified_at: datetime
 
 @dataclass
-class User(_FromJsonMixin):
+class User(DataclassJsonMixin):
     id: str
     username: str
     acct: str
@@ -132,6 +112,7 @@ class User(_FromJsonMixin):
     def at_username(self) -> str:
         '''Full webfinger address'''
         domain = self.url.split('/')[2]
+        domain = '.'.join(domain.split('.')[-2:])
         return f"@{self.username}@{domain}"
 
 @dataclass
@@ -146,7 +127,7 @@ class Role:
     updated_at: str
 
 @dataclass
-class CredentialSource(_FromJsonMixin):
+class CredentialSource(DataclassJsonMixin):
     privacy: VisibilityDirect
     sensitive: bool
     language: str
@@ -160,7 +141,7 @@ class AuthorizedUser(User):
     role: Role
     
 @dataclass
-class MediaAttachment(_FromJsonMixin):
+class MediaAttachment(DataclassJsonMixin):
     id: str
     type: MediaType
     url: str
@@ -193,7 +174,7 @@ class PollOption:
     votes_count: int
 
 @dataclass
-class Poll(_FromJsonMixin):
+class Poll(DataclassJsonMixin):
     id: str
     expires_at: datetime
     expired: bool
@@ -211,7 +192,7 @@ class PreviewType(Enum):
     RICH = "rich"
 
 @dataclass
-class PreviewCard(_FromJsonMixin):
+class PreviewCard(DataclassJsonMixin):
     url: str
     title: str
     description: str
@@ -225,12 +206,11 @@ class PreviewCard(_FromJsonMixin):
     embed_url: str
     blurhash: str|None
 
-class Post(_FromJsonMixin):
-    '''A post, toot, tweet, or status'''
+@dataclass
+class _PostBase(DataclassJsonMixin):
     id: str
     created_at: str
     account: User
-    content: str
     visibility: VisibilityDirect
     sensitive: bool
     spoiler_text: str
@@ -249,8 +229,15 @@ class Post(_FromJsonMixin):
     poll: Poll|None
     card: PreviewCard|None
     language: str|None
-    text: str|None
     edited_at: str|None
+
+class Post(_PostBase):
+    '''A post, toot, tweet, or status'''
+    content: str
+
+class DeletedPost(_PostBase):
+    '''A deleted post'''
+    text: str|None
 
 class AuthorizedPost(Post):
     favourited: bool
@@ -268,7 +255,7 @@ class PollSetup:
     hide_totals: bool|None
 
 @dataclass
-class ScheduledPostParams(_FromJsonMixin):
+class ScheduledPostParams(DataclassJsonMixin):
     text: str
     poll: PollSetup|None
     media_ids: list[str]|None
@@ -281,7 +268,8 @@ class ScheduledPostParams(_FromJsonMixin):
     idempotency: str|None
     with_rate_limit: bool
 
-class ScheduledPost(_FromJsonMixin):
+@dataclass
+class ScheduledPost(DataclassJsonMixin):
     '''A scheduled post that has not been posted yet'''
     id: str
     scheduled_at: datetime
@@ -295,6 +283,8 @@ class Mastodon(WebAPI):
 
     def __init__(self, instance_url: str, auth: OAuth2, lang: str = "en"):
         super().__init__(auth, True)
+        if not instance_url.startswith('https://'):
+            instance_url = F"https://{instance_url}"
         self.base_url = instance_url + "/api/v1/"
         self.lang = lang
 
@@ -313,84 +303,70 @@ class Mastodon(WebAPI):
         @user@domain : any other domain
         '''
         if account.startswith("@"):
-            return await self.GET(User, "accounts/lookup", {"acct": account[1:]} )
+            return await self._get(User, "accounts/lookup", {"acct": account[1:]} )
         else: # ID
-            return await self.GET(User, F"accounts/{account}")
+            return await self._get(User, F"accounts/{account}")
 
     @requires_scopes(ScopeGranular.READ_ACCOUNTS)
     async def me(self) -> AuthorizedUser:
         '''Get the currently authenticated user'''
-        return await self.GET(AuthorizedUser, "accounts/verify_credentials")
+        return await self._get(AuthorizedUser, "accounts/verify_credentials")
+    
+    async def _statuses_post(self, text: str|None = None, media_ids: list[str]|None = None, reply_to: str|None = None, poll: PollSetup|None = None, sensitive: bool|None = None, spoiler_text: str|None = None, visibility: Visibility|None = None, lang: str|None = None) -> Post:
+        data = {}
+        if text: data["status"] = text
+        if media_ids: data['media_ids'] = media_ids
+        if reply_to: data['in_reply_to_id'] = reply_to
+        if poll: data['poll'] = poll
+        if sensitive: data['sensitive'] = sensitive
+        if spoiler_text: data['spoiler_text'] = spoiler_text
+        if visibility: data['visibility'] = visibility.value
+        if lang: data['language'] = lang
+        return await self._post(Post, "statuses", data=data)
     
     @requires_scopes(ScopeGranular.WRITE_STATUSES)
     async def post(self, text: str, media_ids: list[str]|None = None, reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: Visibility = Visibility.PUBLIC,lang: str|None = None) -> Post:
         '''Make a new post'''
-        data = {
-            "status": text,
-            'media_ids': media_ids,
-            'language': lang or self.lang,
-            'sensitive': sensitive,
-            'spoiler_text': spoiler_text,
-            'visibility': visibility,
-            'in_reply_to_id': reply_to
-        }
-        return await self.POST(Post, "statuses", data)
+        return await self._statuses_post(text, media_ids, reply_to, sensitive=sensitive, spoiler_text=spoiler_text, visibility=visibility, lang=lang)
     
     async def post_media(self, media_ids: list[str], reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: Visibility = Visibility.PUBLIC,lang: str|None = None) -> Post:
         '''Make a new post with no text and only images'''
-        data = {
-            'media_ids': media_ids,
-            'language': lang or self.lang,
-            'sensitive': sensitive,
-            'spoiler_text': spoiler_text,
-            'visibility': visibility,
-            'in_reply_to_id': reply_to
-        }
-        return await self.POST(Post, "statuses", data)
+        return await self._statuses_post(None, media_ids, reply_to, sensitive=sensitive, spoiler_text=spoiler_text, visibility=visibility, lang=lang)
     
-    async def post_poll(self, text: str, poll: PollSetup, reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: Visibility = Visibility.PUBLIC,lang: str|None = None) -> Post:
+    async def post_poll(self, text: str, poll: PollSetup, reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: Visibility = Visibility.PUBLIC, lang: str|None = None) -> Post:
         '''Make a new post with a poll'''
-        data = {
-            "status": text,
-            'language': lang or self.lang,
-            'sensitive': sensitive,
-            'spoiler_text': spoiler_text,
-            'visibility': visibility,
-            'in_reply_to_id': reply_to,
-            'poll': asdict(poll)
-        }
-        return await self.POST(Post, "statuses", data)
+        return await self._statuses_post(text, None, reply_to, poll, sensitive=sensitive, spoiler_text=spoiler_text, visibility=visibility, lang=lang)
 
     
-    async def edit_post(self, post_id: str, text: str, media_ids: list[str]|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: Visibility = Visibility.PUBLIC, lang: str|None = None) -> Post:
+    async def edit_post(self, post_id: str, text: str, media_ids: list[str]|None = None, reply_to: str|None = None, poll: PollSetup|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: Visibility = Visibility.PUBLIC, lang: str|None = None) -> Post:
         '''Edit an existing post'''
-        data = {
-            "status": text,
-            'media_ids': media_ids,
-            'language': lang or self.lang,
-            'sensitive': sensitive,
-            'spoiler_text': spoiler_text,
-            'visibility': visibility,
-        }
-        return await self.PUT(Post, F"statuses/{post_id}", data)
-    
+        data = {}
+        if text: data["status"] = text
+        if media_ids: data['media_ids'] = media_ids
+        if reply_to: data['in_reply_to_id'] = reply_to
+        if poll: data['poll'] = poll
+        if sensitive: data['sensitive'] = sensitive
+        if spoiler_text: data['spoiler_text'] = spoiler_text
+        if visibility: data['visibility'] = visibility.value
+        if lang: data['language'] = lang
+        return await self._put(Post, F"statuses/{post_id}", data=data)
     
     async def get_post(self, post_id: str) -> Post:
         '''Get a post by ID'''
-        return await self.GET(Post, F"statuses/{post_id}")
+        return await self._get(Post, F"statuses/{post_id}")
     
     async def get_my_post(self, post_id: str) -> AuthorizedPost:
         '''Get a post with extra info, if posted by the authorized user, by ID'''
-        return await self.GET(AuthorizedPost, F"statuses/{post_id}")
+        return await self._get(AuthorizedPost, F"statuses/{post_id}")
     
-    async def delete_post(self, post_id: str) -> Post:
+    async def delete_post(self, post_id: str) -> DeletedPost:
         '''Delete a post by ID'''
-        return await self.DELETE(Post, F"statuses/{post_id}")
+        return await self._delete(DeletedPost, F"statuses/{post_id}")
     
     async def boost(self, post_id: str, visibility: Visibility = Visibility.PUBLIC):
         '''Boost a post'''
-        data = { "visibility": visibility }
-        await self.POST(None, F"statuses/{post_id}/reblog", data=data)
+        data = { "visibility": visibility.value }
+        await self._post(None, F"statuses/{post_id}/reblog", data=data)
 
     async def schedule_post(self, text: str, scheduled_at: datetime, media_ids: list[str]|None = None, reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: Visibility = Visibility.PUBLIC,lang: str|None = None) -> ScheduledPost:
         '''Schedule a new post, at least 5 minutes in the future'''
@@ -400,11 +376,11 @@ class Mastodon(WebAPI):
             'language': lang or self.lang,
             'sensitive': sensitive,
             'spoiler_text': spoiler_text,
-            'visibility': visibility,
+            'visibility': visibility.value,
             'in_reply_to_id': reply_to,
             'scheduled_at': scheduled_at.isoformat()
         }
-        return await self.POST(ScheduledPost, "statuses", data)
+        return await self._post(ScheduledPost, "statuses", data=data)
     
     async def schedule_media(self, media_ids: list[str], scheduled_at: datetime, reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: Visibility = Visibility.PUBLIC,lang: str|None = None) -> ScheduledPost:
         '''Schedule a new post with no text and only images, at least 5 minutes in the future'''
@@ -413,11 +389,11 @@ class Mastodon(WebAPI):
             'language': lang or self.lang,
             'sensitive': sensitive,
             'spoiler_text': spoiler_text,
-            'visibility': visibility,
+            'visibility': visibility.value,
             'in_reply_to_id': reply_to,
             'scheduled_at': scheduled_at.isoformat()
         }
-        return await self.POST(ScheduledPost, "statuses", data)
+        return await self._post(ScheduledPost, "statuses", data=data)
     
     async def schedule_poll(self, text: str, poll: PollSetup, scheduled_at: datetime, reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: Visibility = Visibility.PUBLIC,lang: str|None = None) -> ScheduledPost:
         '''Schedule a new post with a poll, at least 5 minutes in the future'''
@@ -426,8 +402,8 @@ class Mastodon(WebAPI):
             'language': lang or self.lang,
             'sensitive': sensitive,
             'spoiler_text': spoiler_text,
-            'visibility': visibility,
+            'visibility': visibility.value,
             'in_reply_to_id': reply_to,
             'scheduled_at': scheduled_at.isoformat(),
         }
-        return await self.POST(ScheduledPost, "statuses", data)
+        return await self._post(ScheduledPost, "statuses", data=data)
