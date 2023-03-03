@@ -15,6 +15,26 @@ RE_AT_AT = re.compile(r'@(\w+)@(\w+)')
 # like @username
 RE_AT = re.compile(r'@(\w+)')
 
+def _dataclass_from_json(cls, obj: Any):
+    params = {}
+    for field in fields(cls):
+        if field.name not in obj:
+            raise ValueError(f"Missing expected field {field.name} for {cls}")
+        if field.type == datetime:
+            params[field.name] = datetime.fromisoformat(obj[field.name])
+        elif hasattr(field.type, 'from_json'):
+            params[field.name] = field.type.from_json(obj[field.name])
+        elif is_dataclass(field.type):
+            params[field.name] = _dataclass_from_json(field.type, obj[field.name])
+        elif issubclass(field.type, Enum):
+            params[field.name] = field.type(obj[field.name])
+        else:
+            params[field.name] = obj[field.name]
+    return cls(**params)
+
+class _FromJsonMixin:
+    @classmethod
+    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
 
 class ScopeSimple:
     READ = "read"
@@ -71,23 +91,6 @@ class MediaType(Enum):
     AUDIO = "audio"
     UNKNOWN = "unknown"
 
-def _dataclass_from_json(cls, obj: Any):
-    params = {}
-    for field in fields(cls):
-        if field.name not in obj:
-            raise ValueError(f"Missing expected field {field.name} for {cls}")
-        if field.type == datetime:
-            params[field.name] = datetime.fromisoformat(obj[field.name])
-        elif hasattr(field.type, 'from_json'):
-            params[field.name] = field.type.from_json(obj[field.name])
-        elif is_dataclass(field.type):
-            params[field.name] = _dataclass_from_json(field.type, obj[field.name])
-        elif issubclass(field.type, Enum):
-            params[field.name] = field.type(obj[field.name])
-        else:
-            params[field.name] = obj[field.name]
-    return cls(**params)
-
 @dataclass
 class Emoji:
     shortcode: str
@@ -97,16 +100,13 @@ class Emoji:
     category: str
 
 @dataclass
-class UserField:
+class UserField(_FromJsonMixin):
     name: str
     value: str
     verified_at: datetime
 
-    @classmethod
-    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
-
 @dataclass
-class User:
+class User(_FromJsonMixin):
     id: str
     username: str
     acct: str
@@ -134,9 +134,6 @@ class User:
         domain = self.url.split('/')[2]
         return f"@{self.username}@{domain}"
 
-    @classmethod
-    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
-
 @dataclass
 class Role:
     id: str
@@ -149,7 +146,7 @@ class Role:
     updated_at: str
 
 @dataclass
-class CredentialSource:
+class CredentialSource(_FromJsonMixin):
     privacy: VisibilityDirect
     sensitive: bool
     language: str
@@ -158,15 +155,12 @@ class CredentialSource:
     fields: list[UserField]
     follow_requests_count: int
 
-    @classmethod
-    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
-
 class AuthorizedUser(User):
     source: CredentialSource
     role: Role
     
 @dataclass
-class MediaAttachment:
+class MediaAttachment(_FromJsonMixin):
     id: str
     type: MediaType
     url: str
@@ -175,9 +169,6 @@ class MediaAttachment:
     meta: JsonMap
     description: str
     blurhash: str
-
-    @classmethod
-    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
 
 @dataclass
 class Application:
@@ -202,7 +193,7 @@ class PollOption:
     votes_count: int
 
 @dataclass
-class Poll:
+class Poll(_FromJsonMixin):
     id: str
     expires_at: datetime
     expired: bool
@@ -212,9 +203,6 @@ class Poll:
     voted: bool|None
     own_votes: list[int]|None
 
-    @classmethod
-    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
-
 class PreviewType(Enum):
     '''Preview type'''
     LINK = "link"
@@ -223,7 +211,7 @@ class PreviewType(Enum):
     RICH = "rich"
 
 @dataclass
-class PreviewCard:
+class PreviewCard(_FromJsonMixin):
     url: str
     title: str
     description: str
@@ -237,10 +225,7 @@ class PreviewCard:
     embed_url: str
     blurhash: str|None
 
-    @classmethod
-    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
-
-class Post:
+class Post(_FromJsonMixin):
     '''A post, toot, tweet, or status'''
     id: str
     created_at: str
@@ -267,9 +252,6 @@ class Post:
     text: str|None
     edited_at: str|None
 
-    @classmethod
-    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
-
 class AuthorizedPost(Post):
     favourited: bool
     reblogged: bool
@@ -286,7 +268,7 @@ class PollSetup:
     hide_totals: bool|None
 
 @dataclass
-class ScheduledPostParams:
+class ScheduledPostParams(_FromJsonMixin):
     text: str
     poll: PollSetup|None
     media_ids: list[str]|None
@@ -296,26 +278,15 @@ class ScheduledPostParams:
     in_reply_to_id: str|None
     language: str|None
     application_id: str|None
-    # scheduled_at: None
-    # idempotency: str|None
+    idempotency: str|None
     with_rate_limit: bool
 
-    @classmethod
-    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
-    
-
-class ScheduledPost:
+class ScheduledPost(_FromJsonMixin):
     '''A scheduled post that has not been posted yet'''
     id: str
     scheduled_at: datetime
     params: ScheduledPostParams
     media_attachments: list[MediaAttachment]
-
-    @classmethod
-    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
-
-# class CredentialAccount(User):
-#     source: Any
 
 class Mastodon(WebAPI):
     '''
