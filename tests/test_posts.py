@@ -3,7 +3,7 @@ from SlyMastodon import *
 
 auth = OAuth2("tests/app.json", "tests/user.json")
 
-# @pytest.mark.skipif(sys.gettrace() is None, reason="Posts real.")
+@pytest.mark.skipif(sys.gettrace() is None, reason="Posts real.")
 async def test_toot():
 
     mast = Mastodon("mastodon.skye.vg", auth)
