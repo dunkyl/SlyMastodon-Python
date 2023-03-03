@@ -2,17 +2,18 @@
 Mastodon API and types
 https://docs.joinmastodon.org/api/
 '''
-from dataclasses import dataclass
-import datetime
+from dataclasses import asdict, dataclass, fields, is_dataclass
+from datetime import datetime
 from enum import Enum
 import re
 from typing import Any
 from SlyAPI import *
+from SlyAPI.web import JsonMap
 
 # like @username@domain
-RE_AT_AT = re.compile(r'@([a-zA-Z0-9_]+)@([a-zA-Z0-9_]+)')
+RE_AT_AT = re.compile(r'@(\w+)@(\w+)')
 # like @username
-RE_AT = re.compile(r'@([a-zA-Z0-9_]+)')
+RE_AT = re.compile(r'@(\w+)')
 
 
 class ScopeSimple:
@@ -48,36 +49,71 @@ class ScopeGranular:
     WRITE_REPORTS = "write:reports"
     WRITE_STATUSES = "write:statuses"
 
-class V8y(Enum):
+class Visibility(Enum):
     '''Visibility'''
     PUBLIC = "public"
     UNLISTED = "unlisted"
     PRIVATE = "private"
 
-Visibility = V8y
-
-class V8yEx(Enum):
+class VisibilityDirect(Enum):
     '''Extended visibility for direct messages'''
     PUBLIC = "public"
     UNLISTED = "unlisted"
     PRIVATE = "private"
     DIRECT = "direct"
-    LIMITED = "limited"
+    # LIMITED = "limited"
 
-VisibilityEx = V8yEx
+class MediaType(Enum):
+    '''Media type'''
+    IMAGE = "image"
+    GIFV = "gifv"
+    VIDEO = "video"
+    AUDIO = "audio"
+    UNKNOWN = "unknown"
 
-class Emoji: pass
+def _dataclass_from_json(cls, obj: Any):
+    params = {}
+    for field in fields(cls):
+        if field.name not in obj:
+            raise ValueError(f"Missing expected field {field.name} for {cls}")
+        if field.type == datetime:
+            params[field.name] = datetime.fromisoformat(obj[field.name])
+        elif hasattr(field.type, 'from_json'):
+            params[field.name] = field.type.from_json(obj[field.name])
+        elif is_dataclass(field.type):
+            params[field.name] = _dataclass_from_json(field.type, obj[field.name])
+        elif issubclass(field.type, Enum):
+            params[field.name] = field.type(obj[field.name])
+        else:
+            params[field.name] = obj[field.name]
+    return cls(**params)
 
-class UserField: pass
+@dataclass
+class Emoji:
+    shortcode: str
+    url: str
+    static_url: str
+    visible_in_picker: bool
+    category: str
 
+@dataclass
+class UserField:
+    name: str
+    value: str
+    verified_at: datetime
+
+    @classmethod
+    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
+
+@dataclass
 class User:
     id: str
     username: str
-    # acct: str
+    acct: str
     display_name: str
     locked: bool
     bot: bool
-    created_at: datetime.datetime
+    created_at: datetime
     discoverable: bool
     note: str
     url: str
@@ -88,49 +124,195 @@ class User:
     followers_count: int
     following_count: int
     statuses_count: int
-    last_status_at: datetime.datetime
+    last_status_at: datetime
     emojis: list[Emoji]
     fields: list[UserField]
 
-    # TODO: how
-    domain: str
-    at_username: str # @username@domain
+    @property
+    def at_username(self) -> str:
+        '''Full webfinger address'''
+        domain = self.url.split('/')[2]
+        return f"@{self.username}@{domain}"
 
-    def __init__(self, src: Any):
-        raise NotImplementedError()
+    @classmethod
+    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
+
+@dataclass
+class Role:
+    id: str
+    name: str
+    dolor: str
+    position: int
+    permissions: int
+    highlighted: bool
+    created_at: str
+    updated_at: str
+
+@dataclass
+class CredentialSource:
+    privacy: VisibilityDirect
+    sensitive: bool
+    language: str
+    note: str
+    visibility: str
+    fields: list[UserField]
+    follow_requests_count: int
+
+    @classmethod
+    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
+
+class AuthorizedUser(User):
+    source: CredentialSource
+    role: Role
     
-def clean_html(html: str) -> str:
-    raise NotImplementedError()
+@dataclass
+class MediaAttachment:
+    id: str
+    type: MediaType
+    url: str
+    preview_url: str
+    remote_url: str|None
+    meta: JsonMap
+    description: str
+    blurhash: str
+
+    @classmethod
+    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
+
+@dataclass
+class Application:
+    name: str
+    website: str|None
+
+@dataclass
+class StatusMention:
+    id: str
+    username: str
+    url: str
+    acct: str
+
+@dataclass
+class StatusTag:
+    name: str
+    url: str
+
+@dataclass
+class PollOption:
+    title: str
+    votes_count: int
+
+@dataclass
+class Poll:
+    id: str
+    expires_at: datetime
+    expired: bool
+    multiple: bool
+    votes_count: int
+    options: list[PollOption]
+    voted: bool|None
+    own_votes: list[int]|None
+
+    @classmethod
+    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
+
+class PreviewType(Enum):
+    '''Preview type'''
+    LINK = "link"
+    PHOTO = "photo"
+    VIDEO = "video"
+    RICH = "rich"
+
+@dataclass
+class PreviewCard:
+    url: str
+    title: str
+    description: str
+    type: PreviewType
+    author_name: str
+    author_url: str
+    provider_name: str
+    provider_url: str
+    height: int
+    image: str|None
+    embed_url: str
+    blurhash: str|None
+
+    @classmethod
+    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
 
 class Post:
     '''A post, toot, tweet, or status'''
     id: str
-    created_at: datetime.datetime
-    # ...
-    html_content: str
-    # ...
+    created_at: str
+    account: User
+    content: str
+    visibility: VisibilityDirect
+    sensitive: bool
+    spoiler_text: str
+    media_attachments: list[MediaAttachment]
+    application: Application|None
+    mentions: list[StatusMention]
+    tags: list[StatusTag]
+    emojis: list[Emoji]
+    reblogs_count: int
+    favourites_count: int
+    replies_count: int
+    url: str|None
+    in_reply_to_id: str|None
+    in_reply_to_account_id: str|None
+    reblog: 'Post|None'
+    poll: Poll|None
+    card: PreviewCard|None
+    language: str|None
+    text: str|None
+    edited_at: str|None
 
-    @property
-    def content(self) -> str:
-        return clean_html(self.html_content)
+    @classmethod
+    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
 
-    def __init__(self, src: Any):
-        raise NotImplementedError()
-    
-class ScheduledPost:
-    '''A scheduled post that has not been posted yet'''
-    scheduled_at: datetime.datetime
-    params: dict[str, Any]
-
-    def __init__(self, src: Any):
-        raise NotImplementedError()
+class AuthorizedPost(Post):
+    favourited: bool
+    reblogged: bool
+    muted: bool
+    bookmarked: bool
+    pinned: bool
+    filtered: bool
     
 @dataclass
-class Poll:
+class PollSetup:
     options: list[str]
     expires_in: int # seconds
-    multiple: bool
-    hide_totals: bool
+    multiple: bool|None
+    hide_totals: bool|None
+
+@dataclass
+class ScheduledPostParams:
+    text: str
+    poll: PollSetup|None
+    media_ids: list[str]|None
+    sensitive: bool|None
+    spoiler_text: str|None
+    visibility: VisibilityDirect
+    in_reply_to_id: str|None
+    language: str|None
+    application_id: str|None
+    # scheduled_at: None
+    # idempotency: str|None
+    with_rate_limit: bool
+
+    @classmethod
+    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
+    
+
+class ScheduledPost:
+    '''A scheduled post that has not been posted yet'''
+    id: str
+    scheduled_at: datetime
+    params: ScheduledPostParams
+    media_attachments: list[MediaAttachment]
+
+    @classmethod
+    def from_json(cls, obj: JsonMap): return _dataclass_from_json(cls, obj)
 
 # class CredentialAccount(User):
 #     source: Any
@@ -141,7 +323,7 @@ class Mastodon(WebAPI):
     '''
 
     def __init__(self, instance_url: str, auth: OAuth2, lang: str = "en"):
-        super().__init__(auth)
+        super().__init__(auth, True)
         self.base_url = instance_url + "/api/v1/"
         self.lang = lang
 
@@ -160,20 +342,17 @@ class Mastodon(WebAPI):
         @user@domain : any other domain
         '''
         if account.startswith("@"):
-            return User(
-                await self.get_json(F"accounts/lookup", {"acct": account[1:]})
-            )
+            return await self.GET(User, "accounts/lookup", {"acct": account[1:]} )
         else: # ID
-            return User(
-                await self.get_json(F"accounts/{account}")
-            )
+            return await self.GET(User, F"accounts/{account}")
 
     @requires_scopes(ScopeGranular.READ_ACCOUNTS)
-    async def me(self):
+    async def me(self) -> AuthorizedUser:
         '''Get the currently authenticated user'''
-        return await self.account("verify_credentials")
+        return await self.GET(AuthorizedUser, "accounts/verify_credentials")
     
-    async def post(self, text: str, media_ids: list[str]|None = None, reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: V8y = V8y.PUBLIC,lang: str|None = None) -> Post:
+    @requires_scopes(ScopeGranular.WRITE_STATUSES)
+    async def post(self, text: str, media_ids: list[str]|None = None, reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: Visibility = Visibility.PUBLIC,lang: str|None = None) -> Post:
         '''Make a new post'''
         data = {
             "status": text,
@@ -184,9 +363,9 @@ class Mastodon(WebAPI):
             'visibility': visibility,
             'in_reply_to_id': reply_to
         }
-        return Post(await self.post_form(F"statuses", data))
+        return await self.POST(Post, "statuses", data)
     
-    async def post_media(self, media_ids: list[str], reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: V8y = V8y.PUBLIC,lang: str|None = None) -> Post:
+    async def post_media(self, media_ids: list[str], reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: Visibility = Visibility.PUBLIC,lang: str|None = None) -> Post:
         '''Make a new post with no text and only images'''
         data = {
             'media_ids': media_ids,
@@ -196,9 +375,9 @@ class Mastodon(WebAPI):
             'visibility': visibility,
             'in_reply_to_id': reply_to
         }
-        return Post(await self.post_form(F"statuses", data))
+        return await self.POST(Post, "statuses", data)
     
-    async def post_poll(self, text: str, poll: Poll, reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: V8y = V8y.PUBLIC,lang: str|None = None) -> Post:
+    async def post_poll(self, text: str, poll: PollSetup, reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: Visibility = Visibility.PUBLIC,lang: str|None = None) -> Post:
         '''Make a new post with a poll'''
         data = {
             "status": text,
@@ -207,16 +386,12 @@ class Mastodon(WebAPI):
             'spoiler_text': spoiler_text,
             'visibility': visibility,
             'in_reply_to_id': reply_to,
-            # TODO: is it really like this or should it be a nested dict?
-            'poll[options]': poll.options,
-            'poll[expires_in]': poll.expires_in,
-            'poll[multiple]': poll.multiple,
-            'poll[hide_totals]': poll.hide_totals
+            'poll': asdict(poll)
         }
-        return Post(await self.post_form(F"statuses", data))
+        return await self.POST(Post, "statuses", data)
 
     
-    async def edit_post(self, post_id: str, text: str, media_ids: list[str]|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: V8y = V8y.PUBLIC, lang: str|None = None) -> Post:
+    async def edit_post(self, post_id: str, text: str, media_ids: list[str]|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: Visibility = Visibility.PUBLIC, lang: str|None = None) -> Post:
         '''Edit an existing post'''
         data = {
             "status": text,
@@ -226,23 +401,27 @@ class Mastodon(WebAPI):
             'spoiler_text': spoiler_text,
             'visibility': visibility,
         }
-        return Post(await self.put_form(F"statuses/{post_id}", data))
+        return await self.PUT(Post, F"statuses/{post_id}", data)
     
     
     async def get_post(self, post_id: str) -> Post:
         '''Get a post by ID'''
-        return Post(await self.get_json(F"statuses/{post_id}"))
+        return await self.GET(Post, F"statuses/{post_id}")
     
-    async def delete_post(self, post_id: str):
+    async def get_my_post(self, post_id: str) -> AuthorizedPost:
+        '''Get a post with extra info, if posted by the authorized user, by ID'''
+        return await self.GET(AuthorizedPost, F"statuses/{post_id}")
+    
+    async def delete_post(self, post_id: str) -> Post:
         '''Delete a post by ID'''
-        await self.delete_json(F"statuses/{post_id}")
+        return await self.DELETE(Post, F"statuses/{post_id}")
     
-    async def boost(self, post_id: str, visibility: V8y = V8y.PUBLIC):
+    async def boost(self, post_id: str, visibility: Visibility = Visibility.PUBLIC):
         '''Boost a post'''
         data = { "visibility": visibility }
-        await self.post_form(F"statuses/{post_id}/reblog", data=data)
+        await self.POST(None, F"statuses/{post_id}/reblog", data=data)
 
-    async def schedule_post(self, text: str, scheduled_at: datetime.datetime, media_ids: list[str]|None = None, reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: V8y = V8y.PUBLIC,lang: str|None = None) -> ScheduledPost:
+    async def schedule_post(self, text: str, scheduled_at: datetime, media_ids: list[str]|None = None, reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: Visibility = Visibility.PUBLIC,lang: str|None = None) -> ScheduledPost:
         '''Schedule a new post, at least 5 minutes in the future'''
         data = {
             "status": text,
@@ -254,9 +433,9 @@ class Mastodon(WebAPI):
             'in_reply_to_id': reply_to,
             'scheduled_at': scheduled_at.isoformat()
         }
-        return ScheduledPost(await self.post_form(F"statuses", data))
+        return await self.POST(ScheduledPost, "statuses", data)
     
-    async def schedule_media(self, media_ids: list[str], scheduled_at: datetime.datetime, reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: V8y = V8y.PUBLIC,lang: str|None = None) -> ScheduledPost:
+    async def schedule_media(self, media_ids: list[str], scheduled_at: datetime, reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: Visibility = Visibility.PUBLIC,lang: str|None = None) -> ScheduledPost:
         '''Schedule a new post with no text and only images, at least 5 minutes in the future'''
         data = {
             'media_ids': media_ids,
@@ -267,9 +446,9 @@ class Mastodon(WebAPI):
             'in_reply_to_id': reply_to,
             'scheduled_at': scheduled_at.isoformat()
         }
-        return ScheduledPost(await self.post_form(F"statuses", data))
+        return await self.POST(ScheduledPost, "statuses", data)
     
-    async def schedule_poll(self, text: str, poll: Poll, scheduled_at: datetime.datetime, reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: V8y = V8y.PUBLIC,lang: str|None = None) -> ScheduledPost:
+    async def schedule_poll(self, text: str, poll: PollSetup, scheduled_at: datetime, reply_to: str|None = None, sensitive: bool = False, spoiler_text: str|None = None, visibility: Visibility = Visibility.PUBLIC,lang: str|None = None) -> ScheduledPost:
         '''Schedule a new post with a poll, at least 5 minutes in the future'''
         data = {
             "status": text,
@@ -280,4 +459,4 @@ class Mastodon(WebAPI):
             'in_reply_to_id': reply_to,
             'scheduled_at': scheduled_at.isoformat(),
         }
-        return ScheduledPost(await self.post_form(F"statuses", data))
+        return await self.POST(ScheduledPost, "statuses", data)
