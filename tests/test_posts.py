@@ -8,7 +8,7 @@ async def test_toot():
 
     mast = Mastodon("mastodon.skye.vg", auth)
 
-    toot = await mast.post("test 4")
+    toot = await mast.post("test post please ignore")
 
     toot_get = await mast.get_post(toot.id)
 

@@ -38,7 +38,7 @@ asyncio.run(main())
 ## Example CLI Usage
 
 ```sh
-py -m SlyMastodon scaffold
+py -m SlyMastodon scaffold mastodon.skye.vg
 # ...
 py -m SlyMastodon grant
 ```
