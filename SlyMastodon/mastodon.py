@@ -1,5 +1,6 @@
 '''
-Mastodon API and types
+Mastodon API client and authenticated types
+
 https://docs.joinmastodon.org/api/
 '''
 import asyncio
@@ -20,12 +21,22 @@ RE_AT_AT = re.compile(r'@(\w+)@(\w+)')
 RE_AT = re.compile(r'@(\w+)')
 
 class ScopeSimple:
+    '''
+    Top level scopes for OAuth2
+
+    https://docs.joinmastodon.org/api/oauth-scopes/
+    '''
     READ = "read"
     WRITE = "write"
     FOLLOW = "follow"
     PUSH = "push"
 
 class ScopeGranular:
+    '''
+    Granular scopes for OAuth2
+
+    https://docs.joinmastodon.org/api/oauth-scopes/
+    '''
     READ_ACCOUNTS = "read:accounts"
     READ_BLOCKS = "read:blocks"
     READ_BOOKMARKS = "read:bookmarks"
@@ -54,6 +65,7 @@ class ScopeGranular:
 
 @dataclass
 class CredentialSource(DataclassJsonMixin):
+    '''Extra info provided for the account of an authorized user'''
     sensitive: bool
     language: str
     note: str
@@ -62,10 +74,20 @@ class CredentialSource(DataclassJsonMixin):
     follow_requests_count: int
 
 class AuthorizedUser(User):
+    '''
+    The currently authenticated user
+
+    https://docs.joinmastodon.org/entities/Account/#CredentialAccount
+    '''
     source: CredentialSource
     role: Role
 
 class AuthorizedPost(Post):
+    '''
+    A post made by the authorized user with some extra fields
+    
+    https://docs.joinmastodon.org/entities/Status/#favourited
+    '''
     favourited: bool
     reblogged: bool
     muted: bool
@@ -75,10 +97,38 @@ class AuthorizedPost(Post):
     
 @dataclass
 class PollSetup:
+    '''Parameters for creating a poll when posting'''
     options: list[str]
     expires_in: int # seconds
     multiple: bool|None
     hide_totals: bool|None
+
+@dataclass
+class ScheduledPostParams(DataclassJsonMixin):
+    '''https://docs.joinmastodon.org/entities/ScheduledStatus/#params'''
+    text: str
+    poll: PollSetup|None
+    media_ids: list[str]|None
+    sensitive: bool|None
+    spoiler_text: str|None
+    visibility: PrivacyDirect
+    in_reply_to_id: str|None
+    language: str|None
+    application_id: str|None
+    idempotency: str|None
+    with_rate_limit: bool
+
+@dataclass
+class ScheduledPost(DataclassJsonMixin):
+    '''
+    A scheduled post that has not been posted yet
+    
+    https://docs.joinmastodon.org/entities/ScheduledStatus/
+    '''
+    id: str
+    scheduled_at: datetime
+    params: ScheduledPostParams
+    media_attachments: list[MediaAttachment]
 
 import urllib3
 import os

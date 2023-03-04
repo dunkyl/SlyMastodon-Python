@@ -1,3 +1,6 @@
+'''
+Extended support for deserialization of Python types from JSON
+'''
 from dataclasses import fields, is_dataclass
 import sys
 from types import NoneType
@@ -11,7 +14,7 @@ from SlyAPI.web import JsonTypeCo
 
 T = TypeVar('T')
 
-def dataclass_from_json(cls: type[T], value: JsonTypeCo, typevars: dict[str, type]) -> T:
+def _dataclass_from_json(cls: type[T], value: JsonTypeCo, typevars: dict[str, type]) -> T:
     if not isinstance(value, dict):
         raise TypeError(F"Failed to convert {value} to {cls}")
     return cls(**{
@@ -22,15 +25,18 @@ def dataclass_from_json(cls: type[T], value: JsonTypeCo, typevars: dict[str, typ
 def convert_from_json(cls: type[T], value: JsonTypeCo, typevars_: dict[str, type]|None = None, parent: type|None = None) -> T:
     """
     Convert a json value to a T instance.
-    `cls` must be trusted, since the type may contain string type annotations that are evaluated.
-        - For instance, recursive data structures.
-    May not round-trip, especially if a member of T is a union of multiple types with the same shallow json representation (e.g. set | list, dict | dataclass)
+
+    May not round-trip, especially if a member of T is a union of multiple types with the same representation (e.g. `set | list`, `dict | dataclass`)
+
     Fails if representation was different than what was expected.
-    Supported non-json types:
-        - datetime.datetime
-        - enum.Enum
-        - set[T], tuple[T, ...]
-        - dataclasses (assuming all members are convertable)
+    Additional supported types different from json:
+    
+    - `datetime.datetime`
+    - `enum.Enum`
+    - `set[T]`, `tuple[T, ...]`
+    - dataclasses (assuming all members are convertable)
+    - TypeAliases
+    - Generic TypeAliases and dataclasses
     """
     typevars = (typevars_ or {})
     if inspect.isabstract(cls):
@@ -40,7 +46,7 @@ def convert_from_json(cls: type[T], value: JsonTypeCo, typevars_: dict[str, type
         return value
     elif hasattr(cls, 'from_json'): # overridden deserialization
         return getattr(cls, 'from_json')(value)
-    elif hasattr(cls, '__origin__'): # built-in generics
+    elif hasattr(cls, '__origin__'): # generics
         origin: type = getattr(cls, '__origin__')
         if origin in (list, set):
             t, = getattr(cls, '__args__')
@@ -67,7 +73,7 @@ def convert_from_json(cls: type[T], value: JsonTypeCo, typevars_: dict[str, type
                 str(var): t # like ~T: int
                 for var, t in zip(typeparams, args)
             }
-            return dataclass_from_json(origin, value, typevars | newtypevars) # type: ignore - is_dataclass discards T
+            return _dataclass_from_json(origin, value, typevars | newtypevars) # type: ignore - is_dataclass discards T
         else:
             raise err
     elif type(cls) is TypeVar:
@@ -86,7 +92,7 @@ def convert_from_json(cls: type[T], value: JsonTypeCo, typevars_: dict[str, type
                 pass
         raise err
     elif is_dataclass(cls):
-        return dataclass_from_json(cls, value, typevars) # type: ignore - is_dataclass discards T
+        return _dataclass_from_json(cls, value, typevars) # type: ignore - is_dataclass discards T
     elif cls == datetime:
         if isinstance(value, str):
             return datetime.fromisoformat(value) # type: ignore
@@ -109,8 +115,8 @@ def convert_from_json(cls: type[T], value: JsonTypeCo, typevars_: dict[str, type
         raise TypeError(F"No known conversion from {value} to {cls}")
 
 class DataclassJsonMixin:
+    """Mixin for dataclasses to add a from_json method"""
 
     @classmethod
-    def from_json(cls: type[T], value: JsonTypeCo) -> T:
-        # print(value)
-        return dataclass_from_json(cls, value, {})
+    def from_json(cls: type[T], value: 'JsonTypeCo') -> T:
+        return _dataclass_from_json(cls, value, {})

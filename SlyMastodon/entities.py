@@ -33,6 +33,7 @@ class MediaType(Enum):
 
 @dataclass
 class Emoji:
+    '''https://docs.joinmastodon.org/entities/CustomEmoji/'''
     shortcode: str
     url: str
     static_url: str
@@ -41,12 +42,14 @@ class Emoji:
 
 @dataclass
 class UserField(DataclassJsonMixin):
+    'https://docs.joinmastodon.org/entities/Account/#Field'
     name: str
     value: str
     verified_at: datetime
 
 @dataclass
 class User(DataclassJsonMixin):
+    '''https://docs.joinmastodon.org/entities/Account/'''
     id: str
     username: str
     acct: str
@@ -77,6 +80,7 @@ class User(DataclassJsonMixin):
 
 @dataclass
 class Role:
+    'https://docs.joinmastodon.org/entities/Role/'
     id: str
     name: str
     dolor: str
@@ -86,20 +90,6 @@ class Role:
     created_at: str
     updated_at: str
 
-@dataclass
-class CredentialSource(DataclassJsonMixin):
-    privacy: PrivacyDirect
-    sensitive: bool
-    language: str
-    note: str
-    visibility: str
-    fields: list[UserField]
-    follow_requests_count: int
-
-class AuthorizedUser(User):
-    source: CredentialSource
-    role: Role
-    
 @dataclass
 class _MediaAttachmentBase(DataclassJsonMixin):
     id: str
@@ -111,21 +101,29 @@ class _MediaAttachmentBase(DataclassJsonMixin):
     blurhash: str
 
 class MediaAttachment(_MediaAttachmentBase):
+    'https://docs.joinmastodon.org/entities/MediaAttachment/'
     url: str
 
     def str(self) -> str:
         return self.id
 
 class UnuploadedMediaAttachment(_MediaAttachmentBase):
+    'Media attachment that has not finished being uploaded yet'
     url: str|None
 
 @dataclass
 class Application:
+    'https://docs.joinmastodon.org/entities/Application/'
     name: str
     website: str|None
 
 @dataclass
 class StatusMention:
+    '''
+    Mentions of user within the status content.
+
+    https://docs.joinmastodon.org/entities/Status/#Mention
+    '''
     id: str
     username: str
     url: str
@@ -133,16 +131,23 @@ class StatusMention:
 
 @dataclass
 class StatusTag:
+    '''
+    Hashtag used within the status content.
+
+    https://docs.joinmastodon.org/entities/Status/#Tag
+    '''
     name: str
     url: str
 
 @dataclass
 class PollOption:
+    '''https://docs.joinmastodon.org/entities/Poll/#Option'''
     title: str
     votes_count: int
 
 @dataclass
 class Poll(DataclassJsonMixin):
+    'https://docs.joinmastodon.org/entities/Poll/'
     id: str
     expires_at: datetime
     expired: bool
@@ -161,6 +166,11 @@ class PreviewType(Enum):
 
 @dataclass
 class PreviewCard(DataclassJsonMixin):
+    '''
+    Rich preview card that is generated using OpenGraph tags from a URL.
+
+    https://docs.joinmastodon.org/entities/PreviewCard/
+    '''
     url: str
     title: str
     description: str
@@ -206,40 +216,3 @@ class Post(_PostBase):
 class DeletedPost(_PostBase):
     '''A deleted post'''
     text: str|None
-
-class AuthorizedPost(Post):
-    favourited: bool
-    reblogged: bool
-    muted: bool
-    bookmarked: bool
-    pinned: bool
-    filtered: bool
-    
-@dataclass
-class PollSetup:
-    options: list[str]
-    expires_in: int # seconds
-    multiple: bool|None
-    hide_totals: bool|None
-
-@dataclass
-class ScheduledPostParams(DataclassJsonMixin):
-    text: str
-    poll: PollSetup|None
-    media_ids: list[str]|None
-    sensitive: bool|None
-    spoiler_text: str|None
-    visibility: PrivacyDirect
-    in_reply_to_id: str|None
-    language: str|None
-    application_id: str|None
-    idempotency: str|None
-    with_rate_limit: bool
-
-@dataclass
-class ScheduledPost(DataclassJsonMixin):
-    '''A scheduled post that has not been posted yet'''
-    id: str
-    scheduled_at: datetime
-    params: ScheduledPostParams
-    media_attachments: list[MediaAttachment]

@@ -1,3 +1,6 @@
+'''
+Mastodon client for public API
+'''
 from SlyAPI import *
 from SlyAPI.auth import NoAuth
 
