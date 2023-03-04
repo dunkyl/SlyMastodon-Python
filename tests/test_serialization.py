@@ -1,6 +1,7 @@
 from dataclasses import asdict
 from SlyMastodon import *
 import SlyMastodon.serialization as ser
+from SlyAPI.web import JsonType
 
 def test_de_simple():
 
@@ -8,7 +9,7 @@ def test_de_simple():
         assert x == ser.convert_from_json(type(x), x)
 
 def test_de_list():
-    x = [1, 2, 3]
+    x: list[JsonType] = [1, 2, 3]
     assert x == ser.convert_from_json(list[int], x)
 
 def test_de_set():
@@ -20,7 +21,7 @@ def test_de_tuple():
     assert x == ser.convert_from_json(tuple[int, float, str], list(x))
 
 def test_de_dict():
-    x = {"a": 1, "b": 2, "c": 3}
+    x: JsonMap = {"a": 1, "b": 2, "c": 3}
     assert x == ser.convert_from_json(dict[str, int], x)
 
 def test_de_enum():
