@@ -10,12 +10,11 @@ from SlyAPI.web import JsonType
 
 T = TypeVar('T')
 
-def dataclass_from_json(cls: type[T], value: JsonType, parent_types: list[type]|None=None) -> T:
+def dataclass_from_json(cls: type[T], value: JsonType, parent_types: list[type]) -> T:
     if not isinstance(value, dict):
         raise TypeError(F"Failed to convert {value} to {cls}")
-    parents = (parent_types or []) + [cls]
     return cls(**{
-        f.name: convert_from_json(f.type, value[f.name], parents)
+        f.name: convert_from_json(f.type, value[f.name], parent_types+[cls])
         for f in fields(cls)
     })
 
@@ -100,4 +99,4 @@ class DataclassJsonMixin:
     @classmethod
     def from_json(cls: type[T], value: JsonType) -> T:
         # print(value)
-        return dataclass_from_json(cls, value, [cls])
+        return dataclass_from_json(cls, value, [])

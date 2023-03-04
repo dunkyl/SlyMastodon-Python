@@ -4,6 +4,8 @@
 
 ## Added
 
+- Public-only API client `MastodonPublic`
+
 - Media endpoints
     - `Mastodon.upload` for attaching media to a post
     - `Mastodon.media` for getting information about a media attachment

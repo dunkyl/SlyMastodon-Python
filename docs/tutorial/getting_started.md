@@ -16,6 +16,12 @@ Note that you will need to replace `mastodon.skye.vg` with the URL of the instan
 
 SlyMastodon also is not a framework or a library aiming to be as accessible as possible. If you aren't familiar with Python, you might want to learn the basics first. If you are familiar with Python, you might want to learn about [asyncio](https://docs.python.org/3/library/asyncio.html) and [type hints](https://docs.python.org/3/library/typing.html) before you begin, as they are used extensively in SlyMastodon and a key part of its design and purpose.
 
+## Public or Authenticated?
+
+In order to control an account, either as a bot or on behalf of a user, you will need to authenticate with the instance. Continue below for instructions on how to do this.
+
+If you only need to read some kinds of data from the instance, you can use the [public API](public.md), which does not require authentication.
+
 ## Getting credentials
 
 SlyMastodon uses OAuth2 to authenticate with Mastodon, which means that you will have to register an application on a particular instance. This might vary from instance to instance, but the general idea is that you will have to create an application on the instance you want to use, and then you will be given a client ID and a client secret. You will also have to provide a redirect URI, which is the URL that the instance will redirect you to after you have authenticated.

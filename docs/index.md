@@ -13,6 +13,8 @@
 :caption: Contents
 
 tutorial/getting_started.md
+tutorial/public.md
+tutorial/media.md
 ```
 
 ```{toctree}
@@ -29,6 +31,7 @@ ref
 :caption: Development
 
 release_notes.md
+include_license.md
 ```
 
 # Indices and tables

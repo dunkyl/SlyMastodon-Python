@@ -1,7 +1,9 @@
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
+from enum import Enum
+from datetime import datetime
 from SlyMastodon import *
 import SlyMastodon.serialization as ser
-from SlyAPI.web import JsonType
+from SlyAPI.web import JsonType, JsonMap
 
 def test_de_simple():
 
@@ -37,8 +39,9 @@ def test_de_dataclass():
     class Test:
         a: int
         b: str
+        c: JsonMap
 
-    x = Test(1, "hi")
+    x = Test(1, "hi", {'a': 1, 'b': {}, 'c': [None, 2.5]})
     assert x == ser.convert_from_json(Test, asdict(x))
 
 def test_de_datetime():
