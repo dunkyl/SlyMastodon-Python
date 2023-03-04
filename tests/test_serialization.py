@@ -1,6 +1,7 @@
 from dataclasses import asdict, dataclass
 from enum import Enum
 from datetime import datetime
+from typing import Generic, TypeAlias, TypeVar
 from SlyMastodon import *
 import SlyMastodon.serialization as ser
 from SlyAPI.web import JsonType, JsonMap
@@ -34,6 +35,10 @@ def test_de_enum():
     x = Test.A
     assert x == ser.convert_from_json(Test, x.value)
 
+def test_de_union():
+    x = 1
+    assert x == ser.convert_from_json(int | str, x)
+
 def test_de_dataclass():
     @dataclass
     class Test:
@@ -41,8 +46,28 @@ def test_de_dataclass():
         b: str
         c: JsonMap
 
-    x = Test(1, "hi", {'a': 1, 'b': {}, 'c': [None, 2.5]})
+    x = Test(1, "hi", {'x': 1, 'y': {}, 'z': [None, 2.5]})
     assert x == ser.convert_from_json(Test, asdict(x))
+
+T = TypeVar('T')
+U = TypeVar('U')
+
+X = tuple[list[T], set[T]]
+
+def test_de_generic_alias():
+    x: X[int] = ([1, 2, 2], {1, 2})
+    assert x == ser.convert_from_json(X[int], list(map(list, x)))
+
+def test_de_dataclass_generic():
+
+    @dataclass
+    class Test(Generic[T]):
+        a: T
+        b: list[T]
+        c: dict[str, T]
+
+    x = Test[int](1, [2, 3], {'x': 1, 'y': 2, 'z': 3})
+    assert x == ser.convert_from_json(Test[int], asdict(x))
 
 def test_de_datetime():
     x = datetime.now()

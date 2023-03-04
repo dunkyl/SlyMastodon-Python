@@ -18,3 +18,4 @@ async def main():
 asyncio.run(main())
 ```
 
+An authenticated [`Mastodon`](SlyMastodon.mastodon.Mastodon) client can also be used to access any of the methods for the public API.

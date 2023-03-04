@@ -67,5 +67,3 @@ It should then output something like:
 ```sh
 @you@skye.vg
 ```
-
-Because he `Mastodon` class manages async resources such as the connection to the instance, so it should be constructed only after there is an async event loop running. Every API call is already a coroutine function and requres an async event loop to run, so you should be able to use a pattern like the one above. If its strictly necessary, you can [start an event loop](https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.set_event_loop) before this yourself, but it is not recommended.
