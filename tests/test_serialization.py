@@ -1,10 +1,10 @@
 from dataclasses import asdict, dataclass
 from enum import Enum
 from datetime import datetime
-from typing import Generic, TypeAlias, TypeVar
+from typing import Generic, TypeVar
 from SlyMastodon import *
 import SlyMastodon.serialization as ser
-from SlyAPI.web import JsonType, JsonMap
+from SlyAPI.web import JsonType
 
 def test_de_simple():
 
@@ -24,7 +24,7 @@ def test_de_tuple():
     assert x == ser.convert_from_json(tuple[int, float, str], list(x))
 
 def test_de_dict():
-    x: JsonMap = {"a": 1, "b": 2, "c": 3}
+    x: JsonType = {"a": 1, "b": 2, "c": 3}
     assert x == ser.convert_from_json(dict[str, int], x)
 
 def test_de_enum():
@@ -44,7 +44,7 @@ def test_de_dataclass():
     class Test:
         a: int
         b: str
-        c: JsonMap
+        c: JsonType
 
     x = Test(1, "hi", {'x': 1, 'y': {}, 'z': [None, 2.5]})
     assert x == ser.convert_from_json(Test, asdict(x))
@@ -52,11 +52,30 @@ def test_de_dataclass():
 T = TypeVar('T')
 U = TypeVar('U')
 
-X = tuple[list[T], set[T]]
+ListSet = tuple[list[T], set[T]]
 
 def test_de_generic_alias():
-    x: X[int] = ([1, 2, 2], {1, 2})
-    assert x == ser.convert_from_json(X[int], list(map(list, x)))
+    x: ListSet[int] = ([1, 2, 2], {1, 2})
+    assert x == ser.convert_from_json(ListSet[int], list(map(list, x)))
+
+def test_de_generic_gerneric_arg():
+    @dataclass
+    class Test(Generic[T]):
+        a: T
+    x = Test[Test[int]](Test[int](1))
+    assert x == ser.convert_from_json(Test[Test[int]], asdict(x))
+    x = Test[list[int]]([1, 2, 3])
+    assert x == ser.convert_from_json(Test[list[int]], asdict(x))
+
+def test_de_delayed_gerneric():
+    @dataclass
+    class Test(Generic[T]):
+        a: 'list[T]'
+        b: 'T'
+    x = Test[Test[int]]([Test[int]([1], 2)], Test[int]([3], 4))
+    assert x == ser.convert_from_json(Test[Test[int]], asdict(x))
+    x = Test[list[int]]([[1, 2, 3]], [])
+    assert x == ser.convert_from_json(Test[list[int]], asdict(x))
 
 def test_de_dataclass_generic():
 
@@ -76,7 +95,7 @@ def test_de_datetime():
 
 def test_de_post():
 
-    x: JsonMap = {
+    x: JsonType = {
         'id': '109958407801025523', 'created_at': '2023-03-03T08:29:10.291Z',
         'in_reply_to_id': None, 'in_reply_to_account_id': None,
         'sensitive': False, 'spoiler_text': '', 'visibility': 'public',
