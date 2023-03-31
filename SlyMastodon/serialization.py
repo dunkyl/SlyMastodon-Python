@@ -34,7 +34,7 @@ def convert_from_json(cls: type[T], value: JsonTypeCo, typevars_: dict[str, type
     - `datetime.datetime`
     - `enum.Enum`
     - `set[T]`, `tuple[T, ...]`
-    - dataclasses (assuming all members are convertable)
+    - dataclasses (assuming all members are convertible)
     - TypeAliases
     - Generic TypeAliases and dataclasses
     """
